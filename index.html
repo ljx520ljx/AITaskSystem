@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI TaskPilot v5.3</title>
+
+    <!-- 核心依赖 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <!-- 新增：Markdown 解析库 -->
+    <script src="https://cdn.staticfile.net/marked/4.3.0/marked.min.js"></script>
+
+    <!-- 字体优化 -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif; }
+        [v-cloak] { display: none; }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.5); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.8); }
+
+        /* 动画 */
+        @keyframes slideInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-card { animation: slideInUp 0.3s ease-out forwards; }
+
+        /* Markdown 样式重置 */
+        .prose h1, .prose h2, .prose h3 { color: #1e293b; font-weight: 700; margin-top: 1em; margin-bottom: 0.5em; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .prose strong { color: #0f172a; font-weight: 700; }
+        .prose p { margin-bottom: 0.8em; }
+    </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 500: '#3B82F6', 600: '#2563EB' },
+                        dark: { 800: '#1e293b', 900: '#0f172a' }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 text-slate-800 h-screen w-screen overflow-hidden">
+
+<div id="app" v-cloak class="flex h-full w-full font-sans">
+
+    <!-- =======================
+         左侧：深色指挥控制台
+         ======================= -->
+    <aside class="w-[380px] bg-slate-900 text-white flex flex-col shadow-2xl z-20 h-full flex-shrink-0 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+
+        <!-- Header -->
+        <div class="p-8 pb-4 relative z-10">
+            <div class="flex items-center gap-3 mb-2">
+                <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/50">
+                    <i class="ri-cpu-line text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">TaskPilot</h1>
+                    <p class="text-xs text-slate-400 font-medium tracking-wider">AI 智能决策引擎</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 核心输入区 -->
+        <div class="flex-1 flex flex-col px-6 py-4 overflow-hidden relative z-10">
+            <div class="flex-1 bg-slate-800/50 rounded-2xl border border-slate-700/50 flex flex-col overflow-hidden group focus-within:ring-2 focus-within:ring-blue-500/50 transition-all duration-300">
+                <!-- 标题栏 -->
+                <div class="px-5 py-3 border-b border-slate-700/50 bg-slate-800/80 flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-300 uppercase flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                            AI 接入就绪
+                        </span>
+                    <span class="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded">DeepSeek</span>
+                </div>
+
+                <!-- 输入框 -->
+                <textarea
+                        v-model="aiPrompt"
+                        @keydown.enter.ctrl="createTask"
+                        class="flex-1 w-full bg-transparent p-5 resize-none outline-none text-slate-200 text-sm leading-relaxed placeholder:text-slate-600"
+                        placeholder="在此输入自然语言指令...
+
+例如：
+“下周一前必须上线新官网，需要先购买云服务器”"></textarea>
+
+                <!-- 底部按钮 -->
+                <div class="p-4 border-t border-slate-700/50 bg-slate-800/30">
+                    <button
+                            @click="createTask"
+                            :disabled="aiLoading || !aiPrompt.trim()"
+                            class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20 active:scale-[0.98]">
+                        <i v-if="aiLoading" class="ri-loader-4-line animate-spin"></i>
+                        <span v-else>执行指令</span>
+                        <span class="text-[10px] opacity-60 font-normal ml-1">(Ctrl+Enter)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 统计面板 -->
+            <div class="mt-6 grid grid-cols-2 gap-4">
+                <div class="bg-slate-800/30 p-4 rounded-xl border border-slate-700/30">
+                    <div class="text-slate-400 text-xs mb-1">待办任务</div>
+                    <div class="text-2xl font-bold text-white">{{ pendingCount }}</div>
+                </div>
+                <div class="bg-slate-800/30 p-4 rounded-xl border border-slate-700/30">
+                    <div class="text-slate-400 text-xs mb-1">已完成</div>
+                    <div class="text-2xl font-bold text-emerald-400">{{ completedCount }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部操作 -->
+        <div class="p-6 border-t border-slate-800 bg-slate-900/50">
+            <button @click="generateReport" class="w-full py-3 rounded-xl border border-slate-700 text-slate-300 font-medium text-sm hover:bg-slate-800 hover:text-white transition flex items-center justify-center gap-2 group">
+                <i class="ri-file-text-line text-slate-500 group-hover:text-blue-400 transition"></i>
+                生成周报总结
+            </button>
+        </div>
+    </aside>
+
+    <!-- =======================
+         右侧：极简白板任务流
+         ======================= -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-gray-50 relative">
+        <!-- Topbar -->
+        <header class="h-20 px-8 flex justify-between items-center bg-white border-b border-gray-200 sticky top-0 z-10">
+            <div>
+                <h2 class="text-xl font-bold text-slate-800 flex items-center gap-3">
+                    任务看板
+                    <span class="px-2 py-0.5 rounded-md bg-gray-100 text-slate-500 text-xs border border-gray-200">
+                            {{ tasks.length }} 项
+                        </span>
+                </h2>
+            </div>
+            <div class="flex gap-2">
+                <div v-if="syncing" class="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full animate-pulse mr-2">
+                    <i class="ri-refresh-line animate-spin"></i> 同步依赖关系...
+                </div>
+                <button @click="fetchTasks" class="p-2.5 rounded-lg text-slate-500 hover:bg-gray-100 hover:text-blue-600 transition" title="刷新">
+                    <i class="ri-refresh-line text-lg"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- List Container -->
+        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <div class="max-w-5xl mx-auto space-y-4">
+                <!-- Empty State -->
+                <div v-if="tasks.length === 0" class="flex flex-col items-center justify-center py-40 text-slate-400">
+                    <div class="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mb-4 opacity-50">
+                        <i class="ri-inbox-archive-line text-4xl text-gray-400"></i>
+                    </div>
+                    <p class="text-sm">暂无任务数据</p>
+                </div>
+
+                <!-- Task Card -->
+                <div v-for="(task, index) in sortedTasks" :key="task.ID"
+                     class="group bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-blue-300 transition-all duration-200 relative animate-card"
+                     :style="{ animationDelay: index * 50 + 'ms' }"
+                     :class="{'opacity-60 bg-gray-50 grayscale': task.status === 'Completed'}">
+
+                    <!-- 左侧高亮条 -->
+                    <div class="absolute left-0 top-4 bottom-4 w-1 rounded-r-full" :class="getPriorityColor(task.priority).bar"></div>
+
+                    <div class="pl-4 flex items-start gap-4">
+                        <!-- Checkbox (支持反选) -->
+                        <button @click="toggleComplete(task)"
+                                class="mt-1 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all shrink-0 active:scale-90"
+                                :class="task.status === 'Completed' ? 'bg-slate-800 border-slate-800 text-white' : 'border-gray-300 hover:border-blue-500 text-transparent bg-white'"
+                                title="点击切换状态">
+                            <i class="ri-check-fill font-bold text-lg" v-if="task.status === 'Completed'"></i>
+                        </button>
+
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-start">
+                                <h3 class="text-base font-bold text-slate-800 leading-snug cursor-pointer hover:text-blue-600 transition"
+                                    @click="openEditModal(task)"
+                                    :class="{'line-through text-slate-400': task.status === 'Completed'}">
+                                    {{ task.title }}
+                                </h3>
+
+                                <!-- Hover Actions -->
+                                <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button @click="openEditModal(task)" class="text-slate-400 hover:text-blue-600 p-1"><i class="ri-edit-box-line text-lg"></i></button>
+                                    <button @click="deleteTask(task.ID)" class="text-slate-400 hover:text-red-600 p-1"><i class="ri-delete-bin-line text-lg"></i></button>
+                                </div>
+                            </div>
+
+                            <p v-if="task.description" class="text-sm text-slate-500 mt-1 line-clamp-2">{{ task.description }}</p>
+
+                            <!-- Tags -->
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                <!-- Priority Badge -->
+                                <span class="px-2 py-0.5 rounded text-xs font-bold border uppercase tracking-wider flex items-center gap-1"
+                                      :class="getPriorityColor(task.priority).badge">
+                                        {{ task.priority || 'Normal' }}
+                                    </span>
+
+                                <!-- Time Estimate -->
+                                <span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-slate-600 border border-gray-200 flex items-center gap-1">
+                                        <i class="ri-time-line"></i> {{ task.estimated_hours }}h
+                                    </span>
+
+                                <!-- Due Date -->
+                                <span v-if="formatDate(task.due_date)"
+                                      class="px-2 py-0.5 rounded text-xs font-medium border flex items-center gap-1"
+                                      :class="isOverdue(task.due_date) && task.status !== 'Completed' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-slate-500 border-gray-200'">
+                                        <i class="ri-calendar-event-line"></i> {{ formatDate(task.due_date) }}
+                                    </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- =======================
+         Modal: 编辑任务
+         ======================= -->
+    <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="showEditModal = false"></div>
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl relative z-10 p-6 space-y-4">
+            <h3 class="font-bold text-slate-800 border-b pb-2">编辑任务</h3>
+
+            <div>
+                <label class="text-xs font-bold text-slate-400 uppercase mb-1.5 block">标题</label>
+                <input v-model="editingTask.title" class="w-full p-3 bg-gray-50 border rounded-xl outline-none text-sm">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase mb-1.5 block">优先级</label>
+                    <select v-model="editingTask.priority" class="w-full p-3 bg-gray-50 border rounded-xl outline-none text-sm">
+                        <option value="High">High (高)</option>
+                        <option value="Normal">Normal (中)</option>
+                        <option value="Low">Low (低)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase mb-1.5 block">工时 (h)</label>
+                    <input type="number" v-model.number="editingTask.estimated_hours" class="w-full p-3 bg-gray-50 border rounded-xl outline-none text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label class="text-xs font-bold text-slate-400 uppercase mb-1.5 block">备注</label>
+                <textarea v-model="editingTask.description" rows="3" class="w-full p-3 bg-gray-50 border rounded-xl text-sm resize-none"></textarea>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-2">
+                <button @click="showEditModal = false" class="px-4 py-2 text-slate-600 hover:bg-gray-100 rounded-lg text-sm font-medium">取消</button>
+                <button @click="saveEdit" class="px-6 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold shadow-lg">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =======================
+         Modal: 周报 (Markdown 渲染)
+         ======================= -->
+    <div v-if="showReportModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" @click="showReportModal = false"></div>
+        <div class="bg-white rounded-2xl w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl relative z-10 overflow-hidden">
+            <div class="px-8 py-5 border-b flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                    <i class="ri-sparkling-fill text-blue-600"></i> AI 智能周报
+                </h3>
+                <button @click="showReportModal = false" class="text-slate-400 hover:text-slate-600"><i class="ri-close-line text-xl"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div v-if="reportLoading" class="flex flex-col items-center justify-center h-full text-slate-400">
+                    <i class="ri-loader-2-line text-3xl animate-spin text-blue-500 mb-2"></i>
+                    <p class="text-sm">DeepSeek 正在分析您的工作数据...</p>
+                </div>
+                <!-- 使用 v-html 渲染 Markdown 解析后的内容 -->
+                <div v-else class="prose prose-sm max-w-none text-slate-600 leading-7" v-html="renderedReport"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const tasks = ref([]);
+            const aiPrompt = ref('');
+            const aiLoading = ref(false);
+            const syncing = ref(false); // 同步状态指示
+            const showReportModal = ref(false);
+            const reportContent = ref('');
+            const reportLoading = ref(false);
+            const showEditModal = ref(false);
+            const editingTask = ref({});
+
+            const API_BASE = 'http://localhost:8080/api/v1';
+
+            const fetchTasks = async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/tasks`);
+                    if(res.ok) tasks.value = await res.json();
+                } catch (e) { console.error(e); }
+            };
+
+            const createTask = async () => {
+                if (!aiPrompt.value.trim()) return;
+                aiLoading.value = true;
+                try {
+                    const res = await fetch(`${API_BASE}/tasks`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: aiPrompt.value })
+                    });
+
+                    if (res.ok) {
+                        aiPrompt.value = '';
+                        await fetchTasks();
+
+                        // --- 核心修复：延迟轮询 ---
+                        // 后端依赖分析是异步的，前端需要等待片刻并自动刷新
+                        syncing.value = true;
+                        setTimeout(() => { fetchTasks(); }, 1500); // 1.5秒后第一次检查
+                        setTimeout(() => { fetchTasks(); syncing.value = false; }, 4000); // 4秒后第二次检查并关闭指示
+                    } else {
+                        alert('创建失败');
+                    }
+                } catch (e) { alert('网络连接错误'); }
+                finally { aiLoading.value = false; }
+            };
+
+            // Markdown 渲染计算属性
+            const renderedReport = computed(() => {
+                if (!reportContent.value) return '';
+                return marked.parse(reportContent.value);
+            });
+
+            const toggleComplete = async (task) => {
+                const newStatus = task.status === 'Completed' ? 'Pending' : 'Completed';
+                try {
+                    const res = await fetch(`${API_BASE}/tasks/${task.ID}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: newStatus })
+                    });
+                    if (res.ok) await fetchTasks();
+                } catch (e) { console.error(e); }
+            };
+
+            const openEditModal = (task) => {
+                editingTask.value = JSON.parse(JSON.stringify(task));
+                showEditModal.value = true;
+            };
+
+            const saveEdit = async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/tasks/${editingTask.value.ID}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(editingTask.value)
+                    });
+                    if (res.ok) { showEditModal.value = false; await fetchTasks(); }
+                } catch (e) { alert('错误'); }
+            };
+
+            const deleteTask = async (id) => {
+                if(!confirm('确认删除?')) return;
+                await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
+                await fetchTasks();
+            };
+
+            const generateReport = async () => {
+                showReportModal.value = true;
+                reportLoading.value = true;
+                try {
+                    const res = await fetch(`${API_BASE}/report`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        reportContent.value = data.report;
+                    }
+                } catch (e) {} finally { reportLoading.value = false; }
+            };
+
+            const sortedTasks = computed(() => {
+                const pMap = { 'High': 3, 'Normal': 2, 'Low': 1, '': 1 };
+                return [...tasks.value].sort((a, b) => {
+                    if (a.status === 'Completed' && b.status !== 'Completed') return 1;
+                    if (a.status !== 'Completed' && b.status === 'Completed') return -1;
+                    const wA = pMap[a.priority] || 1;
+                    const wB = pMap[b.priority] || 1;
+                    if (wA !== wB) return wB - wA;
+                    const tA = a.due_date && !a.due_date.startsWith('0001') ? new Date(a.due_date).getTime() : 9999999999999;
+                    const tB = b.due_date && !b.due_date.startsWith('0001') ? new Date(b.due_date).getTime() : 9999999999999;
+                    return tA - tB;
+                });
+            });
+
+            const pendingCount = computed(() => tasks.value.filter(t => t.status !== 'Completed').length);
+            const completedCount = computed(() => tasks.value.filter(t => t.status === 'Completed').length);
+
+            const formatDate = (d) => {
+                if (!d || d.startsWith('0001')) return '';
+                const date = new Date(d);
+                return `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+            };
+            const isOverdue = (d) => new Date(d) < new Date();
+
+            const getPriorityColor = (p) => {
+                const s = { 'High': { bar: 'bg-rose-500', badge: 'bg-rose-50 text-rose-600 border-rose-100' }, 'Normal': { bar: 'bg-blue-500', badge: 'bg-blue-50 text-blue-600 border-blue-100' }, 'Low': { bar: 'bg-slate-400', badge: 'bg-slate-100 text-slate-500 border-slate-200' } };
+                return s[p] || s['Normal'];
+            };
+
+            onMounted(fetchTasks);
+
+            return {
+                tasks, sortedTasks, pendingCount, completedCount,
+                aiPrompt, aiLoading, syncing,
+                showReportModal, reportContent, reportLoading, renderedReport,
+                showEditModal, editingTask,
+                fetchTasks, createTask, toggleComplete, deleteTask, generateReport, openEditModal, saveEdit,
+                formatDate, getPriorityColor, isOverdue
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
