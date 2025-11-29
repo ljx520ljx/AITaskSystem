@@ -30,7 +30,6 @@ type AIService struct {
 
 // NewAIService 初始化
 func NewAIService(repo *repository.TaskRepository) *AIService {
-	//从环境变量获取 Key
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 
 	if apiKey == "" {

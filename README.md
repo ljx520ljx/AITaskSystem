@@ -1,89 +1,117 @@
-嗨！这是 AITaskSystem (你的 AI 任务管家)
+# 🤖 AI TaskPilot - 智能任务决策引擎
 
-欢迎！这是一个挺酷的任务管理后端项目，用的是 Go + Gin + GORM + SQLite 这一套“黄金搭档”。
-最大的亮点是啥？它支持用大白话加任务（我们内置了一个模拟的 AI 引擎），你说人话，它就能听懂！
+欢迎使用 **AI TaskPilot**！这是一个基于 **DeepSeek R1** 大语言模型构建的智能任务决策系统，而非普通的待办事项列表。
 
-🛠 用到的家伙什
+它能听懂你的自然语言指令，自动分析任务的优先级、截止时间、工时预测。
 
-语言: Go 1.21+ (得有这个！)
+---
 
-框架: Gin Web Framework (跑得飞快)
+## ✨ 核心亮点
 
-数据库: SQLite (本地存数据，省心又省事)
+### 🧠 全流程 AI 托管
+* **自然语言交互**：只需输入 "下周五前必须上线新官网，需要先购买服务器"，AI 会自动拆解。
+* **依赖反向推导**：当创建高优任务时，AI 会自动扫描旧任务，发现前置依赖并自动提升其优先级（*注：AI 判断依赖关系仅供参考，支持人工修正*）。
+* **智能工时预测**：根据任务复杂度自动估算所需时间。
 
-架构: 分层架构 (Model -> Repo -> Service -> Handler，条理清晰！)
+### 📊 智能周报生成
+* **一键生成**：自动生成 Markdown 格式的周报，智能总结工作亮点与产出。
 
-🚀 跑起来！
+---
 
-1. 启动服务
+## 🛠️ 环境准备
 
-先把 Go 环境装好哈，然后只需三步：
+在开始之前，请确保你的环境已安装：
 
-# 1. 进到项目目录里去 (一定要在有 go.mod 的那一层哦)
-# 2. 让 Go 整理一下依赖
+* **Go (Golang)**: 版本 `1.21` 或更高
+* **Git**: 用于代码版本控制
+
+---
+
+## 🚀 快速启动指南
+
+### 第一步：克隆项目
+
+```bash
+git clone https://github.com/ljx520ljx/AITaskSystem
+cd AITaskSystem
+```
+
+### 第二步：配置 API Key 🔑
+
+本项目依赖 **DeepSeek** (或兼容 OpenAI 格式的模型) 提供智能服务。
+请在启动前，根据你的操作系统设置环境变量：
+
+**🐧 Linux / 🍎 macOS (终端):**
+```bash
+export DEEPSEEK_API_KEY="你的真实DeepSeek密钥"
+```
+
+**🪟 Windows (PowerShell):**
+```powershell
+$env:DEEPSEEK_API_KEY="你的真实DeepSeek密钥"
+```
+
+**🪟 Windows (CMD):**
+```cmd
+set DEEPSEEK_API_KEY=你的真实DeepSeek密钥
+```
+
+> **提示**：如果你还没有 Key，可以去 DeepSeek 开放平台申请。如果没有设置此环境变量，AI 相关功能将无法正常工作。
+
+### 第三步：下载依赖并运行
+
+在项目根目录下执行：
+
+```bash
+# 1. 整理并下载 Go 依赖包
 go mod tidy
 
-# 3. 启动！
+# 2. 启动后端服务
 go run main.go
+```
 
+当看到终端输出以下信息时，代表启动成功：
 
-当你看到屏幕上蹦出 Server starting on http://localhost:8080，恭喜，服务已经跑起来啦！
+```text
+[GIN-debug] Listening and serving HTTP on :8080
+2025/xx/xx xx:xx:xx Server starting on http://localhost:8080
+```
 
-2. 来玩玩看 (接口测试)
+---
 
-别关刚才那个窗口，新开一个终端窗口来发指令试试。
+## 🖥️ 如何使用
 
-A. 试试 AI 加任务 (核心玩法)
+### 1. 进入前端界面
+后端启动后，打开浏览器（推荐 Chrome 或 Edge），访问：
 
-直接把这句话扔给它，看它怎么解析：
+👉 **[http://localhost:8080](http://localhost:8080)**
 
-curl -X POST http://localhost:8080/api/v1/tasks/ai \
--H "Content-Type: application/json" \
--d '{"prompt": "明天需要紧急开发支付接口代码"}'
+你将看到 AI TaskPilot 界面。
 
+### 2. 功能操作指南
 
-你会看到的惊喜 (终端返回的数据):
+#### 📝 创建任务
+在左侧深色区域的输入框中，输入任何指令。
 
-{
-"message": "AI Task Created",
-"task": {
-"ID": 1,
-"title": "明天需要紧急开发支付接口代码",
-"status": "Pending",
-"priority": "High",          // 看到没？捕捉到 "紧急" 啦！
-"estimated_hours": 4,        // 提到 "开发"，自动预估 4 小时
-"due_date": "202x-xx-xx..."  // "明天" 这里的日期自动算好了
-}
-}
+> **示例 1**： "紧急修复支付接口 Bug，预计耗时 2 小时"
+>
+> **示例 2**： "下周三前完成数据库迁移，这依赖于购买新服务器"
 
+按 `Ctrl + Enter` 或点击“**执行指令**”，AI 会自动分析并创建任务。
 
-B. 看看任务列表
+#### 👁️ 查看与管理
+* 右侧看板会根据 **依赖关系 > 截止时间 > 优先级** 自动排序。
+* 点击任务左侧的方框 ✅ 可以完成/取消完成。
+* 点击任务标题 ✏️ 可以手动修正 AI 的判断。
 
-查查你都记了啥：
+#### 📑 生成周报
+* 点击左下角的 "**生成周报总结**" 按钮。
+* 稍等片刻，DeepSeek 会为你撰写一份排版精美的 Markdown 工作总结。
 
-curl http://localhost:8080/api/v1/tasks
+---
 
+## 🏗️ 技术栈
 
-C. 生成自动周报
-
-干完活了？先要把任务状态改成 Completed (已完成)，然后来看看总结报告：
-
-curl http://localhost:8080/api/v1/report
-
-
-✅ 测测它的脑子 (自动化测试)
-
-跑个单元测试，看看我们的 AI 逻辑是不是一直在线：
-
-go test ./service/... -v
-
-
-📂 目录大概是这样
-
-model/: 长啥样的数据都在这
-
-repository/: 专门负责跟数据库打交道
-
-service/: 这里是“大脑”，业务逻辑和 AI 解析都在这
-
-handler/: 接待员，负责收发 HTTP 请求
+* **Backend**: Go (Golang), Gin Web Framework, GORM (SQLite)
+* **Frontend**: Vue.js 3, Tailwind CSS
+* **AI Engine**: DeepSeek R1
